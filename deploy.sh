@@ -198,7 +198,12 @@ copy_artifacts () {
                   else
                      echo " [BACKUP] Unable to find the destination directory $3 . Attempting to create one."
                      create_directory "$3"
-                     [[ -n $4 ]] && copy_artifacts "$1" "$2" "$3" "$4" || copy_artifacts "$1" "$2" "$3"
+                     if [ -n $4 ]; 
+                     then 
+                        copy_artifacts "$1" "$2" "$3" "$4"
+                     else
+                        copy_artifacts "$1" "$2" "$3"
+                     fi
                      return 0
                   fi
                else
@@ -248,7 +253,7 @@ create_directory () {
 # @param: Artifact name with path details
 # @return: Status of the execution.
 remove_directory () {
-   if [ -n "$1" ];
+   if [ -n "$1" ] && [ -d "$1" ];
    then
       files=$(ls -1 $1 | wc -l)
       echo " [GENERIC] Detected $1 and $files file(s) in $1. Attempting to delete it"
@@ -256,7 +261,7 @@ remove_directory () {
       echo " [GENERIC] $1 and the $files file(s) in it has been deleted"
       return 0
    else
-      echo " [GENERIC] Please pass a valid argument!."
+      echo " [GENERIC] Invalid directory!. The directory might have already been deleted!. "
       return 1
    fi
 }
@@ -295,6 +300,9 @@ done
 #Backup the existing war
 if ! "$rollback_flag";
 then
+   echo "\n"
+   echo "--------------------------------- STARTING BACKUP PROCESS -----------------------------------"
+   echo "\n"
    echo " [BACKUP] Attempting to backup Artifact."
    copy_artifacts "sample.war" "$TOMCAT_INSTANCE/webapps" "$BACKUP_LOCATION" "$TEMP_LOCATION"
    response_code="$?"
@@ -316,7 +324,9 @@ then
 else 
    source="$WORKSPACE/sample-java/target"
 fi
-
+echo "\n"
+echo "------------------------------- STARTING DEPLOYMENT PROCESS ---------------------------------"
+echo "\n"
 echo " [DEPLOY] Deploying $artifact from $source to $target.."
 deploy_artifact "$source" "$target" "$artifact"
 response_code="$?"
@@ -327,17 +337,26 @@ then
       echo " [DEPLOY] Cleaning up temp directories."
       remove_directory "$TEMP_LOCATION"
    fi
-   echo " [DEPLOY] Deployment successful."
+   echo "\n"
+   echo "----------------------------------- DEPLOYMENT SUCCESSFUL -----------------------------------"
+   echo "\n"
    echo " [DEPLOY] Notifying upstream projects of job completion"
    echo "Finished: SUCCESS"
    exit 0
 else
+   echo "\n"
+   echo "-------------------------  DEPLOYMENT FAILED : INITIATING ROLL BACK -------------------------"
+   echo "\n"
    echo " [DEPLOY] Unable to deploy the latest changes. Rolling back to previous state!."
-   echo " [DEPLOY] Deploying $artifact from $source to $target.."
+   echo " [DEPLOY] Deploying $artifact from $BACKUP_LOCATION to $TOMCAT_INSTANCE.."
    deploy_artifact "$BACKUP_LOCATION" "$TOMCAT_INSTANCE" "$artifact"
    code="$?"
    if [ "$code" -eq 0 ];
    then
+      echo "\n"
+      echo "------------------------------------- ROLL BACK SUCCESS -------------------------------------"
+      echo "\n"
+      echo " [BACKUP] Restoring previously backed up artifact."
       copy_artifacts "sample.war" "$TEMP_LOCATION" "$BACKUP_LOCATION/sample-Java/target"
       if ! "$rollback_flag";
       then
@@ -349,6 +368,9 @@ else
       echo "Finished: FAILURE"
       exit 1
    else
+      echo "\n"
+      echo "------------------------------------- ROLL BACK FAILURE -------------------------------------"
+      echo "\n"
       echo " [DEPLOY] Deployment failed. Please contact system administrator!."
       echo " [DEPLOY] Notifying upstream projects of job completion"
       echo "Finished: FAILURE"
