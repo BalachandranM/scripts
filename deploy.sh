@@ -284,7 +284,7 @@ displayOptions () {
    echo "Usage: $0 -r rollback_flag -o script_options"
    echo -e "\t-r Deploy the previously deployed artifact(i.e,Previous release)"
    echo -e "\t-o Print script options"
-   exit 1
+   exit 0
 }
 
 #Parsing commandline args
