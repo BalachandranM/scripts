@@ -1,5 +1,18 @@
 #!/bin/sh
 
+# --variables declaration--
+rollback_flag=false
+backup_flag=true
+build_id=0
+[ "$build_id" -gt 0 ] && log_file="ABCD-$build_id-deployment.log" || log_file="ABCD-deployment.log"
+artifact="sample.war"
+target="$TOMCAT_INSTANCE"
+#/opt/apache-tomcat-8.5.56/bin
+WORKSPACE="/opt/workspace"
+BACKUP_LOCATION="/opt/apps-backup"
+TEMP_LOCATION="/opt/apps-backup/.tmp"
+#--
+
 # @param: Source location of the artifact
 # @param: Destination location for the deployment/ TOMCAT instance location
 # @param: Artifact name
@@ -290,16 +303,6 @@ displayOptions () {
 }
 
 
-#---execution starts here--
-# --variables declaration--
-rollback_flag=false
-backup_flag=true
-build_id=0
-[ "$build_id" -gt 0 ] && log_file="ABCD-$build_id-deployment.log" || log_file="ABCD-deployment.log"
-artifact="sample.war"
-target="$TOMCAT_INSTANCE"
-WORKSPACE="/opt/workspace"
-
 while getopts "rob:d" opt
 do
    case "$opt" in
@@ -347,8 +350,11 @@ deploy_artifact "$source" "$target" "$artifact"
 response_code="$?"
 if [ "$response_code" -eq 0 ];
 then
-   log " [DEPLOY] Cleaning up temp directories."
-   remove_directory "$TEMP_LOCATION"
+   if "$backup_flag";
+   then
+      log " [DEPLOY] Cleaning up temp directories."
+      remove_directory "$TEMP_LOCATION"
+   fi
    log "\n"
    log "----------------------------------- DEPLOYMENT SUCCESSFUL -----------------------------------"
    log "\n"
@@ -370,9 +376,12 @@ then
       log "------------------------------------- ROLL BACK SUCCESS -------------------------------------"
       log "\n"
       log " [BACKUP] Restoring previously backed up artifact."
-      copy_artifacts $artifact "$TEMP_LOCATION" "$BACKUP_LOCATION/sample-Java/target"
-      log " [DEPLOY] Cleaning up temp directories."
-      remove_directory "$TEMP_LOCATION"
+      copy_artifacts $artifact "$TEMP_LOCATION" "$BACKUP_LOCATION"
+      if "$backup_flag";
+      then
+         log " [DEPLOY] Cleaning up temp directories."
+         remove_directory "$TEMP_LOCATION"
+      fi
       log " [DEPLOY] Deployment failed. Application rolled back to previous state!."
       log " [DEPLOY] Notifying upstream projects of job completion"
       log "Finished: FAILURE"
