@@ -7,6 +7,7 @@
 deploy_artifact () {
    if [  -n "$1" ] && [  -d "$1" ] && [  -n "$2" ] && [ -d "$2" ] && [ -n "$3" ];
    then
+      deploy_dir=$(echo "$3" | cut -d "." -f1)
       #Check and terminate tomcat process
       if [ $(ps -ef | grep tomca[t] | wc -l) -gt 0 ] ;
       then
@@ -32,33 +33,33 @@ deploy_artifact () {
          done
       fi
 
-      #Remove the old sample files
-      log " [DEPLOY] Attempting to clean up sample files from the tomcat container"
-      if [ -f "$2/webapps/sample.war" ]
+      #Remove the old web archive files
+      log " [DEPLOY] Attempting to clean up $deploy_dir files from the tomcat container"
+      if [ -f "$2/webapps/$3" ]
       then
-         log " [DEPLOY] sample web archive ( $2/webapps/sample.war ) detected. Attempting to delete it."
-         rm "$2/webapps/sample.war"
-         log " [DEPLOY] $2/webapps/sample.war has been deleted successfully."
+         log " [DEPLOY] $deploy_dir web archive ( $2/webapps/$3 ) detected. Attempting to delete it."
+         rm "$2/webapps/$3"
+         log " [DEPLOY] $2/webapps/$3 has been deleted successfully."
       else
-         log " [DEPLOY] There is no artifact with name sample.war in $2/webapps/ directory!."
+         log " [DEPLOY] There is no artifact with name $3 in $2/webapps/ directory!."
       fi
 
-      if [ -d "$2/webapps/sample" ]
+      if [ -d "$2/webapps/$deploy_dir" ]
       then
-         log " [DEPLOY] sample web directory ( $2/webapps/sample ) detected. Attempting to delete it!."
-         rm -rf "$2/webapps/sample"
-         log " [DEPLOY] $2/webapps/sample has been deleted successfully."
+         log " [DEPLOY] $deploy_dir web directory ( $2/webapps/$deploy_dir ) detected. Attempting to delete it!."
+         rm -rf "$2/webapps/$deploy_dir"
+         log " [DEPLOY] $2/webapps/$deploy_dir has been deleted successfully."
       else
-         log " [DEPLOY] There is no web directory for sample present in $2/webapps/ path!."
+         log " [DEPLOY] There is no web directory for $deploy_dir present in $2/webapps/ path!."
       fi
 
-      if [ -d "$2/work/Catalina/localhost/sample" ]
+      if [ -d "$2/work/Catalina/localhost/$deploy_dir" ]
       then
-         log " [DEPLOY] $2/work/Catalina/localhost/sample directory detected. Attempting to delete it."
-         rm -rf "$2/work/Catalina/localhost/sample"
-         log " [DEPLOY] $2/work/Catalina/localhost/sample has been deleted successfully."
+         log " [DEPLOY] $2/work/Catalina/localhost/$deploy_dir directory detected. Attempting to delete it."
+         rm -rf "$2/work/Catalina/localhost/$deploy_dir"
+         log " [DEPLOY] $2/work/Catalina/localhost/$deploy_dir has been deleted successfully."
       else
-         log " [DEPLOY] There is no web directory for sample present in $2/work/Catalina/localhost/sample path!."
+         log " [DEPLOY] There is no web directory for $deploy_dir present in $2/work/Catalina/localhost/$deploy_dir path!."
       fi
 
       #Clean up old logs
@@ -76,8 +77,8 @@ deploy_artifact () {
          fi
       fi
 
-      #Copy sample.war to tomcat
-      log " [DEPLOY] Copying sample artifact to tomcat container"
+      #Copy web archive to tomcat
+      log " [DEPLOY] Copying $deploy_dir artifact to tomcat container"
       if [ -f "$1/$3" ];
       then
          if [ -d "$2/webapps" ];
@@ -90,7 +91,7 @@ deploy_artifact () {
          return 1
          fi
       else
-         log " [DEPLOY] No artifacts present for sample in the $1 directory with name $3. Terminating the deployment process!."
+         log " [DEPLOY] No artifacts present for $deploy_dir in the $1 directory with name $3. Terminating the deployment process!."
          return 1
       fi
    
@@ -122,7 +123,6 @@ deploy_artifact () {
       if [ $(ps -ef | grep tomca[t] | wc -l) -gt 0 ];
       then
          log " [DEPLOY] Tomcat process is running."
-         #cp $TOMCAT_INSTANCE/backupstore/sample.html $TOMCAT_INSTANCE/webapps/sample/sample.html
          return 0
       else
          log " [DEPLOY] Unable to start tomcat process. Please contact system administrator for further information."
@@ -271,7 +271,7 @@ remove_all_artifacts () {
       log " [GENERIC] $files file(s) from $1 has been deleted"
       return 0
    else
-      log " [GENERIC] Please pass a valid argument!."
+      log " [GENERIC] Please pass directory details!."
       return 1
    fi
 }
@@ -281,37 +281,45 @@ log () {
 }
 
 displayOptions () {
-   log "Usage: $0 -r rollback_flag -o script_options -b build-id"
-   log -e "\t-r Deploy the previously deployed artifact(i.e,Previous release)"
-   log -e "\t-o Print script options"
-   log -e "\t-b Append build id to deployment log"
+   log "Usage: $0 -r -o -b build-id -d"
+   log "\t-r Deploy the previously deployed artifact(i.e,Previous release)"
+   log "\t-o Print script options"
+   log "\t-b Append build id to deployment log"
+   log "\t-d Disable backup process"
    exit 0
 }
 
-#Parsing commandline args
+
+#---execution starts here--
+# --variables declaration--
 rollback_flag=false
+backup_flag=true
 build_id=0
-while getopts "rob:" opt
+[ "$build_id" -gt 0 ] && log_file="ABCD-$build_id-deployment.log" || log_file="ABCD-deployment.log"
+artifact="sample.war"
+target="$TOMCAT_INSTANCE"
+WORKSPACE="/opt/workspace"
+
+while getopts "rob:d" opt
 do
    case "$opt" in
       r ) rollback_flag=true ;;
       o ) displayOptions ;;
       b ) build_id="$OPTARG" ;;
+      d ) backup_flag=false ;;
    esac
 done
-
-[ "$build_id" -gt 0 ] && log_file="IBPI-$build_id-deployment.log" || log_file="IBPI-deployment.log"
 
 echo "$0 is running as $(whoami)"
 
 #Backup the existing war
-if ! "$rollback_flag";
+if "$backup_flag" && ! "$rollback_flag" ;
 then
    log "\n"
    log "--------------------------------- STARTING BACKUP PROCESS -----------------------------------"
    log "\n"
    log " [BACKUP] Attempting to backup Artifact."
-   copy_artifacts "sample.war" "$TOMCAT_INSTANCE/webapps" "$BACKUP_LOCATION" "$TEMP_LOCATION"
+   copy_artifacts "$artifact" "$TOMCAT_INSTANCE/webapps" "$BACKUP_LOCATION" "$TEMP_LOCATION"
    response_code="$?"
    if [ "$response_code" -gt 0 ]
    then
@@ -320,10 +328,10 @@ then
    else
       log " [BACKUP] Artifact backed up successfully!."
    fi
+else 
+   log " [GENERIC] Skipped backup process."
 fi
-artifact="sample.war"
-target="$TOMCAT_INSTANCE"
-WORKSPACE="/opt/workspace"
+
 if "$rollback_flag";
 then 
    log " [DEPLOY] Rollback flag enabled. Application will be rolled back to the previous deployment state!."
@@ -339,18 +347,16 @@ deploy_artifact "$source" "$target" "$artifact"
 response_code="$?"
 if [ "$response_code" -eq 0 ];
 then
-   if ! "$rollback_flag";
-   then
-      log " [DEPLOY] Cleaning up temp directories."
-      remove_directory "$TEMP_LOCATION"
-   fi
+   log " [DEPLOY] Cleaning up temp directories."
+   remove_directory "$TEMP_LOCATION"
    log "\n"
    log "----------------------------------- DEPLOYMENT SUCCESSFUL -----------------------------------"
    log "\n"
    log " [DEPLOY] Notifying upstream projects of job completion"
    log "Finished: SUCCESS"
    exit 0
-else
+elif ! "$rollback_flag" ;
+then
    log "\n"
    log "-------------------------  DEPLOYMENT FAILED : INITIATING ROLL BACK -------------------------"
    log "\n"
@@ -364,12 +370,9 @@ else
       log "------------------------------------- ROLL BACK SUCCESS -------------------------------------"
       log "\n"
       log " [BACKUP] Restoring previously backed up artifact."
-      copy_artifacts "sample.war" "$TEMP_LOCATION" "$BACKUP_LOCATION/sample-Java/target"
-      if ! "$rollback_flag";
-      then
-         log " [DEPLOY] Cleaning up temp directories."
-         remove_directory "$TEMP_LOCATION"
-      fi
+      copy_artifacts $artifact "$TEMP_LOCATION" "$BACKUP_LOCATION/sample-Java/target"
+      log " [DEPLOY] Cleaning up temp directories."
+      remove_directory "$TEMP_LOCATION"
       log " [DEPLOY] Deployment failed. Application rolled back to previous state!."
       log " [DEPLOY] Notifying upstream projects of job completion"
       log "Finished: FAILURE"
@@ -383,4 +386,12 @@ else
       log "Finished: FAILURE"
       exit 1
    fi
+else
+   log "\n"
+   log "-------------------------------------  DEPLOYMENT FAILURE -------------------------------------"
+   log "\n"
+   log " [DEPLOY] Deployment failed. Please contact system administrator!."
+   log " [DEPLOY] Notifying upstream projects of job completion"
+   log "Finished: FAILURE"
+   exit 1
 fi
