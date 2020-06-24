@@ -36,7 +36,7 @@ deploy_artifact () {
             elif [ "$attempts" -eq 2 ];
             then
                log " [DEPLOY] Attempting to kill the tomcat service."
-               pgrep -f "tomca[t]" | xargs kill -9
+               pkill -9 -f "tomca[t]"
             elif [ "$attempts" -gt 3 ];
             then
                log " [DEPLOY] Unable to stop tomcat process. Terminating the deployment process!."
