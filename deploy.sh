@@ -4,7 +4,7 @@
 rollback_flag=false
 backup_flag=true
 build_id=0
-[ "$build_id" -gt 0 ] && log_file="ABCD-$build_id-deployment.log" || log_file="ABCD-deployment.log"
+[ "$build_id" -gt 0 ] && log_file="/opt/workspace/ABCD-$build_id-deployment.log" || log_file="/opt/workspace/ABCD-deployment.log"
 artifact="sample.war"
 target="$TOMCAT_INSTANCE"
 #/opt/apache-tomcat-8.5.56/bin
@@ -22,11 +22,11 @@ deploy_artifact () {
    then
       deploy_dir=$(echo "$3" | cut -d "." -f1)
       #Check and terminate tomcat process
-      if [ $(ps -ef | grep tomca[t] | wc -l) -gt 0 ] ;
+      if [ "$(pgrep -fc "tomca[t]")" -gt 0 ] ;
       then
          log " [DEPLOY] Tomcat service is running."
          attempts=0
-         while [ $(ps -ef | grep tomca[t] | wc -l) -gt 0 ]
+         while [ "$(pgrep -fc "tomca[t]")" -gt 0 ]
          do
             if [ "$attempts" -lt 2 ];
             then
@@ -36,13 +36,13 @@ deploy_artifact () {
             elif [ "$attempts" -eq 2 ];
             then
                log " [DEPLOY] Attempting to kill the tomcat service."
-               ps -ef | grep tomca[t] | awk '{print $2}' | xargs kill -9
+               pgrep -f "tomca[t]" | xargs kill -9
             elif [ "$attempts" -gt 3 ];
             then
                log " [DEPLOY] Unable to stop tomcat process. Terminating the deployment process!."
                return 1
             fi
-         attempts=`expr "$attempts" + 1`
+         attempts=$((attempts+1))
          done
       fi
 
@@ -79,7 +79,7 @@ deploy_artifact () {
       log " [DEPLOY] Attempting to delete old logs..."
       if [ -d "$2/logs" ];
       then
-         if [ $(ls -1 $2/logs | wc -l) -gt 0 ];
+         if [ "$(ls -1 "$2"/logs | wc -l)" -gt 0 ];
          then
             rm -rfv "$2/logs/*.txt"
             rm -rfv "$2/logs/*.log"
@@ -113,7 +113,7 @@ deploy_artifact () {
       if [ -f "$2/bin/startup.sh" ];
       then
          attempts=0
-         while [ $(ps -ef | grep tomca[t] | wc -l) -lt 1 ]
+         while [ "$(pgrep -fc "tomca[t]")" -lt 1 ]
          do
             if [ "$attempts" -lt 2 ];
             then
@@ -125,7 +125,7 @@ deploy_artifact () {
                log " [DEPLOY] Unable to start tomcat process. Please contact system administrator for further information."
                return 1
             fi
-            attempts=`expr "$attempts" + 1`
+            attempts=$((attempts+1))
          done
       else
          log " [DEPLOY] Unable to find startup.sh in $2/bin directory . Please contact system administrator for further information."
@@ -133,7 +133,7 @@ deploy_artifact () {
       fi
       
       log " [DEPLOY] Ensuring the status of tomcat process."
-      if [ $(ps -ef | grep tomca[t] | wc -l) -gt 0 ];
+      if [ "$(pgrep -fc "tomca[t]")" -gt 0 ];
       then
          log " [DEPLOY] Tomcat process is running."
          return 0
@@ -169,12 +169,12 @@ copy_artifacts () {
                   if [ -d "$3" ];
                   then
                      log " [BACKUP] Found $3 directory."
-                     if [ $(ls -1 $3 | wc -l) -gt 0 ];
+                     if [ "$(ls -1 "$3" | wc -l)" -gt 0 ];
                      then
-                        log " [BACKUP] Found $(ls -1 $3 | wc -l) file(s) in the $3. File(s): $(ls -1 $3)"
+                        log " [BACKUP] Found $(ls -1 "$3" | wc -l) file(s) in the $3. File(s): $(ls -1 "$3")"
                         if [ -n "$4" ];
                         then
-                           if [ -d $4 ];
+                           if [ -d "$4" ];
                            then
                               log " [BACKUP] Attempting to move the files from $3 to $4"
                               copy_artifacts "$1" "$3" "$4"
@@ -207,7 +207,7 @@ copy_artifacts () {
                   else
                      log " [BACKUP] Unable to find the destination directory $3 . Attempting to create one."
                      create_directory "$3"
-                     if [ -n $4 ]; 
+                     if [ -n "$4" ]; 
                      then 
                         copy_artifacts "$1" "$2" "$3" "$4"
                      else
@@ -246,7 +246,8 @@ create_directory () {
       return 1
    else
       log " [GENERIC] Creating $1 directory."
-      mkdir -p -m755 "$1"
+      mkdir -p "$1"
+      chmod 755 "$1"
       if [ -d "$1" ];
       then
          log " [GENERIC] Successfully created $1 directory."
@@ -264,7 +265,7 @@ create_directory () {
 remove_directory () {
    if [ -n "$1" ] && [ -d "$1" ];
    then
-      files=$(ls -1 $1 | wc -l)
+      files=$(ls -1 "$1" | wc -l)
       log " [GENERIC] Detected $1 and $files file(s) in $1. Attempting to delete it"
       rm -rfv "$1"
       log " [GENERIC] $1 and the $files file(s) in it has been deleted"
@@ -278,9 +279,9 @@ remove_directory () {
 remove_all_artifacts () {
    if [ -n "$1" ];
    then
-      files=$(ls -1 $1 | wc -l)
+      files=$(ls -1 "$1" | wc -l)
       log " [GENERIC] Detected $1 and $files file(s) in $1. Attempting to delete it"
-      rm -rfv "$1/*"
+      rm -rfv "${1:?}/"*
       log " [GENERIC] $files file(s) from $1 has been deleted"
       return 0
    else
@@ -302,7 +303,6 @@ displayOptions () {
    exit 0
 }
 
-
 while getopts "rob:d" opt
 do
    case "$opt" in
@@ -310,10 +310,11 @@ do
       o ) displayOptions ;;
       b ) build_id="$OPTARG" ;;
       d ) backup_flag=false ;;
+      * ) log "Invalid commandline argument!!" displayOptions;;
    esac
 done
 
-echo "$0 is running as $(whoami)"
+log "$0 is running as $(whoami)"
 
 #Backup the existing war
 if "$backup_flag" && ! "$rollback_flag" ;
