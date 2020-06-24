@@ -295,6 +295,7 @@ log () {
 }
 
 displayOptions () {
+   [ -n "$1" ] && log "$1 is an invalid command line argument. Please refer the below usage instructions."
    log "Usage: $0 -r -o -b build-id -d"
    log "\t-r Deploy the previously deployed artifact(i.e,Previous release)"
    log "\t-o Print script options"
@@ -310,7 +311,7 @@ do
       o ) displayOptions ;;
       b ) build_id="$OPTARG" ;;
       d ) backup_flag=false ;;
-      * ) log "Invalid commandline argument!!" displayOptions;;
+      * ) displayOptions "$*" ;;
    esac
 done
 
